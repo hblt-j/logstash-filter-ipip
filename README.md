@@ -5,7 +5,7 @@
 
 //gem "logstash-filter-ipip", :path => "/home/tmp/logstash-filter-ipip"
 
-//参照 sepc/logstash.conf 测试，以下安装方式没有测试
+//参照 logstash.conf 测试，以下安装方式没有测试兼容性
 
 # build
 gem build logstash-filter-ipip.gemspec
