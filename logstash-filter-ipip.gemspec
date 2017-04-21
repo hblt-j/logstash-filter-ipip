@@ -1,3 +1,8 @@
+# coding: utf-8
+#lib = File.expand_path('../lib', __FILE__)
+#$LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
+#require 'seventeen_mon/version'
+
 Gem::Specification.new do |s|
   s.name = 'logstash-filter-ipip'
   s.version = '2.0.0'
@@ -21,4 +26,9 @@ Gem::Specification.new do |s|
   s.add_runtime_dependency "logstash-core-plugin-api", ">= 1.60", "<= 2.99"
   s.add_runtime_dependency 'lru_redux', "~> 1.1.0", '>= 1.1.0'
   s.add_development_dependency 'logstash-devutils'
+
+  #modi by j 20170421 add ipip for free with *.data
+  s.add_development_dependency "bundler", "~> 1.5"
+  s.add_development_dependency "rake", "~> 10.1.1"
+  s.add_development_dependency "rspec", "~> 2.14.1"
 end
