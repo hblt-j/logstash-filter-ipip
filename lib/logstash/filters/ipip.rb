@@ -6,12 +6,43 @@ require "tempfile"
 require "thread"
 
 module SeventeenMon
+  class IPDB
+
+    private_class_method :new
+
+    def ip_db_path
+      @ip_db_path ||= File.expand_path'../../../../17monipdb.dat', __FILE__
+    end
+    def ip_db
+      @ip_db ||= File.open ip_db_path, 'rb'
+    end
+
+    def offset
+      @offset ||= ip_db.read(4).unpack("Nlen")[0]
+    end
+
+    def index
+      @index ||= ip_db.read(offset - 4)
+    end
+
+    def max_comp_length
+      @max_comp_length ||= offset - 1028
+    end
+
+    def self.instance
+      @instance ||= self.send :new
+    end
+
+    def seek(_offset, length)
+      IO.read(ip_db_path, length, offset + _offset - 1024).split "\t"
+    end
+  end
   class IPDBX
   
     private_class_method :new
   
     def ip_db_path
-      @ip_db_path ||= '/etc/logstash/conf/ip2location.datx', __FILE__
+    	@ip_db_path ||= File.expand_path'../../../../ipip.datx', __FILE__
     end
   
     def ip_db
@@ -29,11 +60,11 @@ module SeventeenMon
     def max_comp_length
       @max_comp_length ||= offset - 262144 - 4
     end
-  
+    
     def self.instance
       @instance ||= self.send :new
     end
-  
+    
     def seek(_offset, length)
       IO.read(ip_db_path, length, offset + _offset - 262144).split "\t"
     end
@@ -71,7 +102,38 @@ module SeventeenMon
     def packed_ip
       @packed_ip ||= [ ip2long ].pack 'N'
     end
-  
+    
+    def find_free
+      tmp_offset = four_number[0] * 4
+      start = IPDB.instance.index[tmp_offset..(tmp_offset + 3)].unpack("V")[0] * 8 + 1024
+
+      index_offset = nil
+
+      while start < IPDB.instance.max_comp_length
+        if IPDB.instance.index[start..(start + 3)] >= packed_ip
+          index_offset = "#{IPDB.instance.index[(start + 4)..(start + 6)]}\x0".unpack("V")[0]
+          index_length = IPDB.instance.index[(start + 7)].unpack("C")[0]
+          break
+        end
+        start += 8
+      end
+
+      return "N/A" unless index_offset
+
+      result = IPDB.instance.seek(index_offset, index_length).map do |str|
+        str.encode("UTF-8", "UTF-8")
+      end
+=begin
+	puts "==============================="	
+	puts result
+	puts "==============================="	
+=end
+      {
+        country: result[0],
+        province: result[1],
+        city: result[2]
+      }
+    end
     def find
       tmp_offset = (four_number[0] * 256 + four_number[1]) * 4
       start = IPDBX.instance.index[tmp_offset..(tmp_offset + 3)].unpack("V")[0] * 9 + 262144
@@ -92,7 +154,11 @@ module SeventeenMon
       result = IPDBX.instance.seek(index_offset, index_length).map do |str|
         str.encode("UTF-8", "UTF-8")
       end
-  
+=begin
+	puts "==============================="	
+	puts result
+	puts "==============================="	
+=end
     {
       country: result[0],
       province: result[1],
@@ -115,10 +181,20 @@ end
 module SeventeenMon
   require "socket"
   require "ipaddr"
-
+  def self.find_by_ip_free(_ip)
+    IP.new(ip: _ip).find_free
+  end
   def self.find_by_ip(_ip)
     IP.new(ip: _ip).find
   end
+ def self.find_by_address_free(_address)
+    prot, addr = _address.split("://")
+    IP.new(address: addr, protocol: prot).find_free
+ end
+ def self.find_by_address(_address)
+    prot, addr = _address.split("://")
+    IP.new(address: addr, protocol: prot).find
+ end
 end
 
 SM = SeventeenMon
@@ -133,7 +209,8 @@ class LogStash::Filters::IPIP < LogStash::Filters::Base
   #
   # filter {
   #   ipip {
-  #     message => "My message..."
+  #     source => "ip"
+  #     is_free => "true"
   #   }
   # }
   #
@@ -143,6 +220,7 @@ class LogStash::Filters::IPIP < LogStash::Filters::Base
   config :source, :validate => :string, :require => true
   
   config :target, :validate => :string, :default => 'ipip'
+  config :is_free, :validate => :string, :default => 'true'
 
   config :lru_cache_size, :validate => :number, :default => 10000
 
@@ -184,8 +262,12 @@ class LogStash::Filters::IPIP < LogStash::Filters::Base
       return cached if cached
 
       ipip_data = nil
-      ipip_data = SM.find_by_ip ip
 
+      if @is_free == 'true'
+	      ipip_data = SM.find_by_ip_free ip
+      else
+      	ipip_data = SM.find_by_ip ip
+      end
       LOOKUP_CACHE[ip] = ipip_data
       ipip_data
   end
@@ -194,10 +276,14 @@ class LogStash::Filters::IPIP < LogStash::Filters::Base
 
   def set_fields(event, ipip_data)
       if !ipip_data.nil?
-          ipip_data.each do |key, value|
-            @prefixed_key = "#{normalized_target}[#{@key}]"
-            event.set(@prefixed_key, value)
+        ipip_data.each do |key, value|
+          if @is_free == 'true'
+                  event[@target][key.to_s] = value
+            else
+              @prefixed_key = "#{normalized_target}[#{@key}]"
+              event.set(@prefixed_key, value)
           end
+        end
       end
   end
 
