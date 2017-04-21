@@ -5,6 +5,10 @@
 
 //gem "logstash-filter-ipip", :path => "/home/tmp/logstash-filter-ipip"
 
+//wget -o https://rubygems.org/downloads/logstash-output-logservice-0.2.0.gem
+
+//bin/logstash-plugin install /home/tmp/logstash-output-logservice-0.2.0.gem 
+
 //参照 logstash.conf 测试，以下安装方式没有测试兼容性
 
 # build
