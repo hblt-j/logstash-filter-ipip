@@ -1,5 +1,5 @@
 # logstash-filter-ipip     
-//modi by j 20170421 add ipip for free with *.data
+//modi by j 20170421 Added free data support
 
 //建议手动Gemfile加载插件：
 
